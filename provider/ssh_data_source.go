@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -26,16 +25,16 @@ func NewSSHDataSource() datasource.DataSource {
 	return &sshDataSource{}
 }
 
-// sshDataSource => fetches a single SSH rule by integer index.
+// sshDataSource => fetches a single SSH rule by *UUID* (stable ID).
 type sshDataSource struct {
 	httpClient *http.Client
 	endpoint   string
 }
 
-// sshDataSourceModel => local struct for reading the SSH rule by index
+// sshDataSourceModel => local struct for reading the SSH rule by ID (UUID).
 type sshDataSourceModel struct {
-	// We'll store the index in "id" or a separate field—mirroring your ACL DS approach that used ID as index.
-	ID          types.String   `tfsdk:"id"` // index as string
+	// We’ll use "id" to store the UUID the user provides (and keep it in State).
+	ID          types.String   `tfsdk:"id"`
 	Action      types.String   `tfsdk:"action"`
 	Src         []types.String `tfsdk:"src"`
 	Dst         []types.String `tfsdk:"dst"`
@@ -44,7 +43,9 @@ type sshDataSourceModel struct {
 	AcceptEnv   []types.String `tfsdk:"accept_env"`
 }
 
-// ----- 1) Configure / 2) Metadata / 3) Schema -----
+// --------------------------------------------------------------------------------
+// Configure / Metadata / Schema
+// --------------------------------------------------------------------------------
 
 func (d *sshDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
@@ -64,10 +65,10 @@ func (d *sshDataSource) Metadata(ctx context.Context, req datasource.MetadataReq
 
 func (d *sshDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Data source for reading a single SSH rule by integer index in TACL’s array.",
+		Description: "Data source for reading a single SSH rule by UUID in TACL’s /ssh.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "Index of the SSH rule in TACL’s array (e.g. '0').",
+				Description: "The stable UUID of the SSH rule in TACL.",
 				Required:    true,
 			},
 			"action": schema.StringAttribute{
@@ -75,12 +76,12 @@ func (d *sshDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 				Computed:    true,
 			},
 			"src": schema.ListAttribute{
-				Description: "Sources for the SSH rule.",
+				Description: "Sources for the SSH rule (tags, CIDRs, etc.).",
 				Computed:    true,
 				ElementType: types.StringType,
 			},
 			"dst": schema.ListAttribute{
-				Description: "Destinations for the SSH rule.",
+				Description: "Destinations for the SSH rule (host:port, etc.).",
 				Computed:    true,
 				ElementType: types.StringType,
 			},
@@ -102,7 +103,9 @@ func (d *sshDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 	}
 }
 
-// ----- 4) Read -----
+// --------------------------------------------------------------------------------
+// Read
+// --------------------------------------------------------------------------------
 
 func (d *sshDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var data sshDataSourceModel
@@ -112,60 +115,64 @@ func (d *sshDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		return
 	}
 
-	// Interpret the "id" attribute as the numeric index
-	idxStr := data.ID.ValueString()
-	idx, err := strconv.Atoi(idxStr)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid index", fmt.Sprintf("Cannot parse '%s' as integer", idxStr))
+	// 1) Extract the UUID from "id"
+	id := data.ID.ValueString()
+	if id == "" {
+		resp.Diagnostics.AddError("Missing SSH rule ID", "The 'id' attribute must contain a valid UUID.")
 		return
 	}
 
-	// GET /ssh/:index
-	getURL := fmt.Sprintf("%s/ssh/%d", d.endpoint, idx)
-	tflog.Debug(ctx, "Reading SSH data source by index", map[string]interface{}{
-		"url":   getURL,
-		"index": idx,
+	// 2) GET /ssh/<UUID>
+	getURL := fmt.Sprintf("%s/ssh/%s", d.endpoint, id)
+	tflog.Debug(ctx, "Reading SSH data source by UUID", map[string]interface{}{
+		"url": getURL,
+		"id":  id,
 	})
 
-	respBody, err := doSSHIndexRequest(ctx, d.httpClient, http.MethodGet, getURL, nil)
+	body, err := doSSHDataSourceRequest(ctx, d.httpClient, http.MethodGet, getURL, nil)
 	if err != nil {
 		if IsNotFound(err) {
-			resp.Diagnostics.AddWarning("Not found", fmt.Sprintf("No SSH rule at index %d", idx))
+			resp.Diagnostics.AddWarning("Not found", fmt.Sprintf("No SSH rule found for id '%s'", id))
+			// The data source won't be populated in the state if it's not found.
 			return
 		}
 		resp.Diagnostics.AddError("Error reading SSH data source", err.Error())
 		return
 	}
 
-	// The server presumably returns the raw TaclSSHEntry shape for that index
-	// (or you can define a dedicated shape).
-	var sshRule TaclSSHEntry
-	if err := json.Unmarshal(respBody, &sshRule); err != nil {
-		resp.Diagnostics.AddError("JSON parse error", err.Error())
+	// 3) Parse the TaclSSHResponse
+	var sshResp TaclSSHResponse
+	if e := json.Unmarshal(body, &sshResp); e != nil {
+		resp.Diagnostics.AddError("JSON parse error", e.Error())
 		return
 	}
 
-	// Populate Terraform state
-	data.Action = types.StringValue(sshRule.Action)
-	data.Src = toTerraformStringSlice(sshRule.Src)
-	data.Dst = toTerraformStringSlice(sshRule.Dst)
-	data.Users = toTerraformStringSlice(sshRule.Users)
-	data.CheckPeriod = types.StringValue(sshRule.CheckPeriod)
-	data.AcceptEnv = toTerraformStringSlice(sshRule.AcceptEnv)
+	// 4) Update data with fetched info
+	data.ID = types.StringValue(sshResp.ID)
+	data.Action = types.StringValue(sshResp.Action)
+	data.Src = toTerraformStringSlice(sshResp.Src)
+	data.Dst = toTerraformStringSlice(sshResp.Dst)
+	data.Users = toTerraformStringSlice(sshResp.Users)
+	data.CheckPeriod = types.StringValue(sshResp.CheckPeriod)
+	data.AcceptEnv = toTerraformStringSlice(sshResp.AcceptEnv)
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
 
-// doSSHIndexRequest => simpler than resource calls, but same idea
-func doSSHIndexRequest(ctx context.Context, client *http.Client, method, url string, payload interface{}) ([]byte, error) {
+// --------------------------------------------------------------------------------
+// Helper Function
+// --------------------------------------------------------------------------------
+
+// doSSHDataSourceRequest => simpler GET helper for the data source
+func doSSHDataSourceRequest(ctx context.Context, client *http.Client, method, url string, payload interface{}) ([]byte, error) {
 	var body io.Reader
 	if payload != nil {
-		data, err := json.Marshal(payload)
+		b, err := json.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal payload: %w", err)
 		}
-		body = bytes.NewBuffer(data)
+		body = bytes.NewBuffer(b)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, body)

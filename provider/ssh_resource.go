@@ -267,17 +267,26 @@ func (r *sshResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		AcceptEnv:   toStringSlice(plan.AcceptEnv),
 	}
 
-	// 5. PUT /ssh => typically something like { "id": "<uuid>", "action": "...", ... }
-	//    or { "id":"<uuid>", "entry": { ... } }
+	// 5. PUT /ssh => the server expects a payload of:
+	//    {
+	//      "id": "<UUID>",
+	//      "rule": {
+	//        "action": "...",
+	//        "src": [...],
+	//        ...
+	//      }
+	//    }
 	putURL := fmt.Sprintf("%s/ssh", r.endpoint)
 	payload := map[string]interface{}{
-		"id":          id,
-		"action":      input.Action,
-		"src":         input.Src,
-		"dst":         input.Dst,
-		"users":       input.Users,
-		"checkPeriod": input.CheckPeriod,
-		"acceptEnv":   input.AcceptEnv,
+		"id": id,
+		"rule": map[string]interface{}{
+			"action":      input.Action,
+			"src":         input.Src,
+			"dst":         input.Dst,
+			"users":       input.Users,
+			"checkPeriod": input.CheckPeriod,
+			"acceptEnv":   input.AcceptEnv,
+		},
 	}
 
 	tflog.Debug(ctx, "Updating SSH rule by ID", map[string]interface{}{
@@ -361,7 +370,6 @@ func (r *sshResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 // Helper HTTP logic
 // ----------------------------------------------------------------------------
 
-// doSSHIDRequest => helper for create/read/update/delete calls.
 func doSSHIDRequest(ctx context.Context, client *http.Client, method, url string, payload interface{}) ([]byte, error) {
 	var body io.Reader
 	if payload != nil {
