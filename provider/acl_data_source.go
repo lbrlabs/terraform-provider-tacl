@@ -1,4 +1,3 @@
-// acl_data_source.go
 package provider
 
 import (
@@ -8,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -27,20 +25,32 @@ func NewACLDataSource() datasource.DataSource {
 	return &aclDataSource{}
 }
 
-// aclDataSource => for a single new-style ACL (by index).
+// aclDataSource => for a single ACL looked up by stable UUID.
 type aclDataSource struct {
 	httpClient *http.Client
 	endpoint   string
 }
 
+// aclDataSourceModel => mirrors the shape of the data source’s attributes in Terraform.
 type aclDataSourceModel struct {
-	ID     types.String   `tfsdk:"id"` // index as string
-	Action types.String   `tfsdk:"action"`
+	ID     types.String   `tfsdk:"id"`     // The TACL stable UUID
+	Action types.String   `tfsdk:"action"` // e.g. "accept"/"deny"
 	Src    []types.String `tfsdk:"src"`
 	Proto  types.String   `tfsdk:"proto"`
 	Dst    []types.String `tfsdk:"dst"`
 }
 
+// extendedACLResponse => shape returned by GET /acls/:id
+// (which is the server’s ExtendedACLEntry: ID + ACL fields).
+type extendedACLResponse struct {
+	ID     string   `json:"id"`
+	Action string   `json:"action"`
+	Src    []string `json:"src"`
+	Proto  string   `json:"proto,omitempty"`
+	Dst    []string `json:"dst"`
+}
+
+// Configure => capture the provider’s httpClient + base endpoint.
 func (d *aclDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -53,16 +63,18 @@ func (d *aclDataSource) Configure(ctx context.Context, req datasource.ConfigureR
 	d.endpoint = provider.endpoint
 }
 
+// Metadata => tells Terraform our data source name: "tacl_acl".
 func (d *aclDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_acl"
 }
 
+// Schema => defines the TF attributes for this data source.
 func (d *aclDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Data source for reading a single new-style ACL entry by index.",
+		Description: "Data source for reading a single ACL entry by stable UUID.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "Index of the ACL entry in TACL’s array (e.g. '0').",
+				Description: "Stable UUID of the ACL entry in TACL.",
 				Required:    true,
 			},
 			"action": schema.StringAttribute{
@@ -70,7 +82,7 @@ func (d *aclDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 				Computed:    true,
 			},
 			"src": schema.ListAttribute{
-				Description: "List of sources.",
+				Description: "List of ACL sources (CIDRs, tags, etc.).",
 				Computed:    true,
 				ElementType: types.StringType,
 			},
@@ -79,7 +91,7 @@ func (d *aclDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 				Computed:    true,
 			},
 			"dst": schema.ListAttribute{
-				Description: "List of destinations.",
+				Description: "List of ACL destinations (CIDRs, tags, etc.).",
 				Computed:    true,
 				ElementType: types.StringType,
 			},
@@ -87,7 +99,9 @@ func (d *aclDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 	}
 }
 
+// Read => performs the HTTP GET /acls/<uuid> and sets the data source state.
 func (d *aclDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	// 1. Parse user input config from the data source "id" (UUID).
 	var data aclDataSourceModel
 	diags := req.Config.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -95,47 +109,56 @@ func (d *aclDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		return
 	}
 
-	idxStr := data.ID.ValueString()
-	idx, err := strconv.Atoi(idxStr)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid index", fmt.Sprintf("Cannot parse '%s' as integer", idxStr))
+	uuid := data.ID.ValueString()
+	if uuid == "" {
+		resp.Diagnostics.AddError(
+			"Missing UUID",
+			"The 'id' attribute is required (must be a valid UUID).",
+		)
 		return
 	}
 
-	getURL := fmt.Sprintf("%s/acls/%d", d.endpoint, idx)
-	tflog.Debug(ctx, "Reading new-style ACL data source", map[string]interface{}{
-		"url":   getURL,
-		"index": idx,
+	// 2. Construct GET /acls/<uuid>
+	getURL := fmt.Sprintf("%s/acls/%s", d.endpoint, uuid)
+	tflog.Debug(ctx, "Reading ACL data source by UUID", map[string]interface{}{
+		"url":  getURL,
+		"uuid": uuid,
 	})
 
-	respBody, err := doNewStyleACLDSRequest(ctx, d.httpClient, http.MethodGet, getURL, nil)
+	respBody, err := doACLDSRequest(ctx, d.httpClient, http.MethodGet, getURL, nil)
 	if err != nil {
 		if IsNotFound(err) {
-			resp.Diagnostics.AddWarning("Not found", fmt.Sprintf("No ACL at index %d", idx))
+			// If the server returns 404, we can either set empty or return a warning.
+			resp.Diagnostics.AddWarning(
+				"ACL Not Found",
+				fmt.Sprintf("No ACL with UUID %q was found on the server.", uuid),
+			)
 			return
 		}
 		resp.Diagnostics.AddError("Error reading ACL data source", err.Error())
 		return
 	}
 
-	var acl TaclACLEntry
-	if err := json.Unmarshal(respBody, &acl); err != nil {
+	// 3. Parse the JSON => extendedACLResponse
+	var fetched extendedACLResponse
+	if err := json.Unmarshal(respBody, &fetched); err != nil {
 		resp.Diagnostics.AddError("JSON parse error", err.Error())
 		return
 	}
 
-	// Populate TF state
-	data.Action = types.StringValue(acl.Action)
-	data.Src = toTerraformStringSlice(acl.Src)
-	data.Proto = types.StringValue(acl.Proto)
-	data.Dst = toTerraformStringSlice(acl.Dst)
+	// 4. Populate Terraform state from the fetched data.
+	data.ID = types.StringValue(fetched.ID)
+	data.Action = types.StringValue(fetched.Action)
+	data.Src = toTerraformStringSlice(fetched.Src)
+	data.Proto = types.StringValue(fetched.Proto)
+	data.Dst = toTerraformStringSlice(fetched.Dst)
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
 
-// doNewStyleACLDSRequest => similar to resource, but kept separate.
-func doNewStyleACLDSRequest(ctx context.Context, client *http.Client, method, url string, payload interface{}) ([]byte, error) {
+// doACLDSRequest => minimal helper to do JSON-based HTTP for the data source.
+func doACLDSRequest(ctx context.Context, client *http.Client, method, url string, payload interface{}) ([]byte, error) {
 	var body io.Reader
 	if payload != nil {
 		data, err := json.Marshal(payload)
@@ -157,9 +180,11 @@ func doNewStyleACLDSRequest(ctx context.Context, client *http.Client, method, ur
 	}
 	defer res.Body.Close()
 
+	// Check for 404 separately so we can handle “not found” logic differently in Read.
 	if res.StatusCode == 404 {
 		return nil, &NotFoundError{Message: "ACL not found"}
 	}
+	// For 300+, return error with body.
 	if res.StatusCode >= 300 {
 		msg, _ := io.ReadAll(res.Body)
 		return nil, fmt.Errorf("TACL returned %d: %s", res.StatusCode, string(msg))
