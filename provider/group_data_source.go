@@ -1,4 +1,3 @@
-// group_data_source.go
 package provider
 
 import (
@@ -31,10 +30,9 @@ type groupDataSource struct {
 }
 
 type groupDataSourceModel struct {
-	ID          types.String   `tfsdk:"id"`
-	Name        types.String   `tfsdk:"name"`
-	Members     []types.String `tfsdk:"members"`
-	Description types.String   `tfsdk:"description"`
+	ID      types.String   `tfsdk:"id"`
+	Name    types.String   `tfsdk:"name"`
+	Members []types.String `tfsdk:"members"`
 }
 
 // Configure gets a handle to the provider’s httpClient & endpoint.
@@ -55,7 +53,7 @@ func (d *groupDataSource) Metadata(ctx context.Context, req datasource.MetadataR
 	resp.TypeName = req.ProviderTypeName + "_group"
 }
 
-// Schema => user must specify `name`, we’ll return `id`, `members`, `description`.
+// Schema => user must specify `name`, we’ll return `id` and `members`.
 func (d *groupDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
@@ -71,10 +69,6 @@ func (d *groupDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 				Description: "List of group members.",
 				Computed:    true,
 				ElementType: types.StringType,
-			},
-			"description": schema.StringAttribute{
-				Description: "Description for the group.",
-				Computed:    true,
 			},
 		},
 	}
@@ -107,7 +101,7 @@ func (d *groupDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	// Parse JSON => { "name":"...", "members":[],"description":"" }
+	// Parse JSON => { "name":"...", "members":[] }
 	var fetched map[string]interface{}
 	if err := json.Unmarshal(respBody, &fetched); err != nil {
 		resp.Diagnostics.AddError("JSON parse error", err.Error())
@@ -118,9 +112,6 @@ func (d *groupDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	data.Name = types.StringValue(name)
 	if members, ok := fetched["members"].([]interface{}); ok {
 		data.Members = toStringTypeSlice(members)
-	}
-	if desc, ok := fetched["description"].(string); ok {
-		data.Description = types.StringValue(desc)
 	}
 
 	diags = resp.State.Set(ctx, &data)

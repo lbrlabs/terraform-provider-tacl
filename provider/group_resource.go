@@ -1,4 +1,3 @@
-// group_resource.go
 package provider
 
 import (
@@ -31,10 +30,9 @@ type groupResource struct {
 }
 
 type groupResourceModel struct {
-	ID          types.String   `tfsdk:"id"`          // We'll store the group's name as ID
-	Name        types.String   `tfsdk:"name"`        // Required
-	Members     []types.String `tfsdk:"members"`     // Optional
-	Description types.String   `tfsdk:"description"` // Optional
+	ID      types.String   `tfsdk:"id"`   // We'll store the group's name as ID
+	Name    types.String   `tfsdk:"name"` // Required
+	Members []types.String `tfsdk:"members"`
 }
 
 // Configure extracts the provider's httpClient and endpoint
@@ -72,10 +70,6 @@ func (r *groupResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Optional:    true,
 				ElementType: types.StringType,
 			},
-			"description": schema.StringAttribute{
-				Description: "Optional description for the group.",
-				Optional:    true,
-			},
 		},
 	}
 }
@@ -90,13 +84,12 @@ func (r *groupResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	payload := map[string]interface{}{
-		"name":        data.Name.ValueString(),
-		"members":     toStringSlice(data.Members),
-		"description": data.Description.ValueString(),
+		"name":    data.Name.ValueString(),
+		"members": toStringSlice(data.Members),
 	}
 
 	postURL := fmt.Sprintf("%s/groups", r.endpoint)
-	tflog.Debug(ctx, "Creating group via TACL", map[string]interface{}{
+	tflog.Debug(ctx, "Creating group via Tacl", map[string]interface{}{
 		"url":     postURL,
 		"payload": payload,
 	})
@@ -113,7 +106,7 @@ func (r *groupResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	// For simplicity, just set ID = name. If TACL modifies the name, you'd read it from `created`.
+	// For simplicity, just set ID = name
 	data.ID = data.Name
 
 	diags = resp.State.Set(ctx, &data)
@@ -131,7 +124,7 @@ func (r *groupResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	name := data.Name.ValueString()
 	getURL := fmt.Sprintf("%s/groups/%s", r.endpoint, name)
-	tflog.Debug(ctx, "Reading group via TACL", map[string]interface{}{
+	tflog.Debug(ctx, "Reading group via Tacl", map[string]interface{}{
 		"url":  getURL,
 		"name": name,
 	})
@@ -154,15 +147,11 @@ func (r *groupResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	// Update state from TACL's response
 	data.ID = types.StringValue(name)
 	data.Name = types.StringValue(name)
 
 	if members, ok := fetched["members"].([]interface{}); ok {
 		data.Members = toStringTypeSlice(members)
-	}
-	if desc, ok := fetched["description"].(string); ok {
-		data.Description = types.StringValue(desc)
 	}
 
 	diags = resp.State.Set(ctx, &data)
@@ -179,13 +168,12 @@ func (r *groupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	payload := map[string]interface{}{
-		"name":        data.Name.ValueString(),
-		"members":     toStringSlice(data.Members),
-		"description": data.Description.ValueString(),
+		"name":    data.Name.ValueString(),
+		"members": toStringSlice(data.Members),
 	}
 
 	putURL := fmt.Sprintf("%s/groups", r.endpoint)
-	tflog.Debug(ctx, "Updating group via TACL", map[string]interface{}{
+	tflog.Debug(ctx, "Updating group via Tacl", map[string]interface{}{
 		"url":     putURL,
 		"payload": payload,
 	})
@@ -207,12 +195,8 @@ func (r *groupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	// Optionally refresh data from the updated object
 	if members, ok := updated["members"].([]interface{}); ok {
 		data.Members = toStringTypeSlice(members)
-	}
-	if desc, ok := updated["description"].(string); ok {
-		data.Description = types.StringValue(desc)
 	}
 
 	data.ID = data.Name
@@ -231,7 +215,7 @@ func (r *groupResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 
 	delURL := fmt.Sprintf("%s/groups", r.endpoint)
-	tflog.Debug(ctx, "Deleting group via TACL", map[string]interface{}{
+	tflog.Debug(ctx, "Deleting group via Tacl", map[string]interface{}{
 		"url":  delURL,
 		"name": data.Name.ValueString(),
 	})
@@ -254,6 +238,7 @@ func (r *groupResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	resp.State.RemoveResource(ctx)
 }
 
+// Common doRequest method
 func doRequest(ctx context.Context, client *http.Client, method, url string, payload interface{}) ([]byte, error) {
 	var body io.Reader
 	if payload != nil {
@@ -282,7 +267,7 @@ func doRequest(ctx context.Context, client *http.Client, method, url string, pay
 	}
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("TACL returned %d: %s", resp.StatusCode, string(msg))
+		return nil, fmt.Errorf("Tacl returned %d: %s", resp.StatusCode, string(msg))
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
