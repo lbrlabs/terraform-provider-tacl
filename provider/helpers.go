@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"io"
 	"net/http"
@@ -173,4 +174,31 @@ func toTerraformStringSlice(ss []string) []types.String {
 func isNotFound(err error) bool {
 	_, ok := err.(*NotFoundError)
 	return ok
+}
+
+// listToStringSlice => read a types.List of strings into a Go []string
+func listToStringSlice(ctx context.Context, l types.List) ([]string, error) {
+	if l.IsNull() || l.IsUnknown() {
+		// treat as empty or handle differently
+		return nil, nil
+	}
+	var result []string
+	diags := l.ElementsAs(ctx, &result, false)
+	if diags.HasError() {
+		return nil, fmt.Errorf("cannot convert List to []string: %s", diags.Errors())
+	}
+	return result, nil
+}
+
+// stringSliceToList => build a types.List of strings from Go []string
+func stringSliceToList(ctx context.Context, data []string) (types.List, error) {
+	elems := make([]attr.Value, len(data))
+	for i, s := range data {
+		elems[i] = types.StringValue(s)
+	}
+	listVal, diags := types.ListValue(types.StringType, elems)
+	if diags.HasError() {
+		return types.List{}, fmt.Errorf("failed to build list of strings: %s", diags.Errors())
+	}
+	return listVal, nil
 }

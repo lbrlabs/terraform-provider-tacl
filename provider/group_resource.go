@@ -267,7 +267,7 @@ func doRequest(ctx context.Context, client *http.Client, method, url string, pay
 	}
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Tacl returned %d: %s", resp.StatusCode, string(msg))
+		return nil, fmt.Errorf("tacl returned %d: %s", resp.StatusCode, string(msg))
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
