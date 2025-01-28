@@ -202,3 +202,47 @@ func stringSliceToList(ctx context.Context, data []string) (types.List, error) {
 	}
 	return listVal, nil
 }
+
+// Convert []string => types.List
+func toStringListValue(ctx context.Context, arr []string) (types.List, error) {
+	elems := make([]attr.Value, len(arr))
+	for i, s := range arr {
+		elems[i] = types.StringValue(s)
+	}
+	val, diags := types.ListValue(types.StringType, elems)
+	if diags.HasError() {
+		return types.ListNull(types.StringType), fmt.Errorf("convert error: %s", diags.Errors())
+	}
+	return val, nil
+}
+
+// Convert types.List => []string
+func listToGoStrings(ctx context.Context, l types.List) ([]string, error) {
+	if l.IsNull() || l.IsUnknown() {
+		return nil, nil
+	}
+	var out []string
+	diags := l.ElementsAs(ctx, &out, false)
+	if diags.HasError() {
+		return nil, fmt.Errorf("listToGoStrings error: %s", diags.Errors())
+	}
+	return out, nil
+}
+
+// Convert []string => types.List
+func goStringsToList(arr []string) (types.List, error) {
+    // Convert each string to types.StringValue
+    elems := make([]attr.Value, len(arr))
+    for i, s := range arr {
+        elems[i] = types.StringValue(s)
+    }
+
+    // Build the ListValue and check for diags
+    listVal, diags := types.ListValue(types.StringType, elems)
+    if diags.HasError() {
+        // Combine all diags into an error string
+        return types.ListNull(types.StringType), fmt.Errorf("failed building list of strings: %s", diags.Errors())
+    }
+
+    return listVal, nil
+}
