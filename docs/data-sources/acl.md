@@ -3,12 +3,12 @@
 page_title: "tacl_acl Data Source - terraform-provider-tacl"
 subcategory: ""
 description: |-
-  Data source for reading a single new-style ACL entry by index.
+  Data source for reading a single ACL entry by stable UUID.
 ---
 
 # tacl_acl (Data Source)
 
-Data source for reading a single new-style ACL entry by index.
+Data source for reading a single ACL entry by stable UUID.
 
 
 
@@ -17,11 +17,11 @@ Data source for reading a single new-style ACL entry by index.
 
 ### Required
 
-- `id` (String) Index of the ACL entry in TACL’s array (e.g. '0').
+- `id` (String) Stable UUID of the ACL entry in TACL.
 
 ### Read-Only
 
 - `action` (String) ACL action, e.g. 'accept' or 'deny'.
-- `dst` (List of String) List of destinations.
+- `dst` (List of String) List of ACL destinations (CIDRs, tags, etc.).
 - `proto` (String) Protocol, e.g. 'tcp' or 'udp'.
-- `src` (List of String) List of sources.
+- `src` (List of String) List of ACL sources (CIDRs, tags, etc.).

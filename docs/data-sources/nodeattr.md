@@ -3,12 +3,12 @@
 page_title: "tacl_nodeattr Data Source - terraform-provider-tacl"
 subcategory: ""
 description: |-
-  Data source for reading a single node attribute from /nodeattrs by index.
+  Data source for reading a single node attribute by numeric index (example).
 ---
 
 # tacl_nodeattr (Data Source)
 
-Data source for reading a single node attribute from /nodeattrs by index.
+Data source for reading a single node attribute by numeric index (example).
 
 
 
@@ -17,7 +17,7 @@ Data source for reading a single node attribute from /nodeattrs by index.
 
 ### Required
 
-- `id` (String) Index of the node attribute in TACL’s array.
+- `id` (String) Index of the node attribute in TACL’s array (example).
 
 ### Read-Only
 

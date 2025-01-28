@@ -3,12 +3,12 @@
 page_title: "tacl_derpmap Resource - terraform-provider-tacl"
 subcategory: ""
 description: |-
-  Manages the single ACLDERPMap object at /derpmap.
+  Manages the single ACLDERPMap object at /derpmap with typed fields.
 ---
 
 # tacl_derpmap (Resource)
 
-Manages the single ACLDERPMap object at /derpmap.
+Manages the single ACLDERPMap object at /derpmap with typed fields.
 
 
 
@@ -17,8 +17,39 @@ Manages the single ACLDERPMap object at /derpmap.
 
 ### Required
 
-- `derpmap_json` (String) Full DERPMap JSON. If you prefer typed fields, expand them here.
+- `regions` (Attributes List) List of DERP regions. (see [below for nested schema](#nestedatt--regions))
+
+### Optional
+
+- `omit_default_regions` (Boolean) If true, Tailscale's default DERP regions are omitted.
 
 ### Read-Only
 
 - `id` (String) Always 'derpmap' once created.
+
+<a id="nestedatt--regions"></a>
+### Nested Schema for `regions`
+
+Required:
+
+- `region_code` (String) Short region code, e.g. 'sea-lbr'.
+- `region_id` (Number) Numerical region ID (e.g. 901).
+
+Optional:
+
+- `nodes` (Attributes List) List of DERP nodes in this region. (see [below for nested schema](#nestedatt--regions--nodes))
+- `region_name` (String) Descriptive region name, e.g. 'Seattle [LBR]'.
+
+<a id="nestedatt--regions--nodes"></a>
+### Nested Schema for `regions.nodes`
+
+Required:
+
+- `host_name` (String) Hostname, e.g. 'sea-derp1.lbrlabs.com'.
+- `name` (String) Node name, e.g. 'sea-lbr1'.
+- `region_id` (Number) Region ID the node belongs to.
+
+Optional:
+
+- `ipv4` (String) IPv4 address.
+- `ipv6` (String) IPv6 address.

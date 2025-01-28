@@ -21,6 +21,5 @@ description: |-
 
 ### Read-Only
 
-- `description` (String) Description for the group.
 - `id` (String) Always the same as `name` for reference.
 - `members` (List of String) List of group members.

@@ -21,7 +21,6 @@ description: |-
 
 ### Optional
 
-- `description` (String) Optional description for the group.
 - `members` (List of String) List of group members (strings: emails, other groups, etc.).
 
 ### Read-Only

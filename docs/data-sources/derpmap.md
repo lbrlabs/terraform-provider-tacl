@@ -3,12 +3,12 @@
 page_title: "tacl_derpmap Data Source - terraform-provider-tacl"
 subcategory: ""
 description: |-
-  Data source for reading the single DERPMap object at /derpmap.
+  Data source for reading the single DERPMap object at /derpmap (typed).
 ---
 
 # tacl_derpmap (Data Source)
 
-Data source for reading the single DERPMap object at /derpmap.
+Data source for reading the single DERPMap object at /derpmap (typed).
 
 
 
@@ -17,5 +17,27 @@ Data source for reading the single DERPMap object at /derpmap.
 
 ### Read-Only
 
-- `derpmap_json` (String) Full DERPMap JSON. If you want typed fields, expand them here.
-- `id` (String) Always 'derpmap' if found.
+- `id` (String) Always 'derpmap' if a DERPMap exists on the server.
+- `omit_default_regions` (Boolean) If the server sets OmitDefaultRegions to true, the default Tailscale DERP regions won't be included.
+- `regions` (Attributes List) List of DERP regions from the server, typed read-only. (see [below for nested schema](#nestedatt--regions))
+
+<a id="nestedatt--regions"></a>
+### Nested Schema for `regions`
+
+Read-Only:
+
+- `nodes` (Attributes List) List of DERP nodes in this region, typed read-only. (see [below for nested schema](#nestedatt--regions--nodes))
+- `region_code` (String) Short region code, e.g. 'sea-lbr'.
+- `region_id` (Number) Numerical region ID, e.g. 901.
+- `region_name` (String) Descriptive region name, e.g. 'Seattle [LBR]'.
+
+<a id="nestedatt--regions--nodes"></a>
+### Nested Schema for `regions.nodes`
+
+Read-Only:
+
+- `host_name` (String) Hostname or domain, e.g. 'sea-derp1.lbrlabs.com'.
+- `ipv4` (String) IPv4 address for the node.
+- `ipv6` (String) IPv6 address for the node.
+- `name` (String) Node name, e.g. 'sea-lbr1'.
+- `region_id` (Number) Region ID the node belongs to.
