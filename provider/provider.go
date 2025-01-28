@@ -133,6 +133,7 @@ func (p *taclProvider) DataSources(_ context.Context) []func() datasource.DataSo
 		NewSettingsDataSource,
 		NewNodeAttrDataSource,
 		NewPostureDataSource,
+		NewSSHDataSource,
 	}
 }
 
@@ -147,5 +148,6 @@ func (p *taclProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewSettingsResource,
 		NewNodeAttrResource,
 		NewPostureResource,
+		NewSSHResource,
 	}
 }

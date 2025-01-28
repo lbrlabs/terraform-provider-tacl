@@ -1,3 +1,5 @@
+// ssh_data_source.go
+
 package provider
 
 import (
@@ -14,26 +16,28 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// Ensure interface compliance for Terraform Plugin Framework.
+
+
+// --------------------------------------------------------------------------------
+// sshDataSource
+// --------------------------------------------------------------------------------
+
 var (
 	_ datasource.DataSource              = &sshDataSource{}
 	_ datasource.DataSourceWithConfigure = &sshDataSource{}
 )
 
-// NewSSHDataSource => constructor for "tacl_ssh" data source.
 func NewSSHDataSource() datasource.DataSource {
 	return &sshDataSource{}
 }
 
-// sshDataSource => fetches a single SSH rule by *UUID* (stable ID).
 type sshDataSource struct {
 	httpClient *http.Client
 	endpoint   string
 }
 
-// sshDataSourceModel => local struct for reading the SSH rule by ID (UUID).
+// sshDataSourceModel => data source model
 type sshDataSourceModel struct {
-	// We’ll use "id" to store the UUID the user provides (and keep it in State).
 	ID          types.String   `tfsdk:"id"`
 	Action      types.String   `tfsdk:"action"`
 	Src         []types.String `tfsdk:"src"`
@@ -51,12 +55,12 @@ func (d *sshDataSource) Configure(ctx context.Context, req datasource.ConfigureR
 	if req.ProviderData == nil {
 		return
 	}
-	provider, ok := req.ProviderData.(*taclProvider)
+	p, ok := req.ProviderData.(*taclProvider)
 	if !ok {
 		return
 	}
-	d.httpClient = provider.httpClient
-	d.endpoint = provider.endpoint
+	d.httpClient = p.httpClient
+	d.endpoint = p.endpoint
 }
 
 func (d *sshDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -65,23 +69,23 @@ func (d *sshDataSource) Metadata(ctx context.Context, req datasource.MetadataReq
 
 func (d *sshDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Data source for reading a single SSH rule by UUID in TACL’s /ssh.",
+		Description: "Data source for reading a single SSH rule by UUID from /ssh/:id.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The stable UUID of the SSH rule in TACL.",
 				Required:    true,
 			},
 			"action": schema.StringAttribute{
-				Description: "SSH action: 'accept' or 'check'.",
+				Description: "SSH rule action: 'accept' or 'check'.",
 				Computed:    true,
 			},
 			"src": schema.ListAttribute{
-				Description: "Sources for the SSH rule (tags, CIDRs, etc.).",
+				Description: "Source tags/CIDRs.",
 				Computed:    true,
 				ElementType: types.StringType,
 			},
 			"dst": schema.ListAttribute{
-				Description: "Destinations for the SSH rule (host:port, etc.).",
+				Description: "Destination tags/CIDRs.",
 				Computed:    true,
 				ElementType: types.StringType,
 			},
@@ -91,11 +95,11 @@ func (d *sshDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 				ElementType: types.StringType,
 			},
 			"check_period": schema.StringAttribute{
-				Description: "Duration (e.g. '12h') for check actions.",
+				Description: "CheckPeriod for 'check' actions, e.g. '12h'.",
 				Computed:    true,
 			},
 			"accept_env": schema.ListAttribute{
-				Description: "Environment variable patterns allowed.",
+				Description: "List of environment variables allowed.",
 				Computed:    true,
 				ElementType: types.StringType,
 			},
@@ -104,7 +108,7 @@ func (d *sshDataSource) Schema(ctx context.Context, req datasource.SchemaRequest
 }
 
 // --------------------------------------------------------------------------------
-// Read
+// Read => GET /ssh/:id
 // --------------------------------------------------------------------------------
 
 func (d *sshDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -115,75 +119,75 @@ func (d *sshDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		return
 	}
 
-	// 1) Extract the UUID from "id"
 	id := data.ID.ValueString()
 	if id == "" {
-		resp.Diagnostics.AddError("Missing SSH rule ID", "The 'id' attribute must contain a valid UUID.")
+		resp.Diagnostics.AddError("Missing ID", "Must provide an SSH rule UUID for data source.")
 		return
 	}
 
-	// 2) GET /ssh/<UUID>
 	getURL := fmt.Sprintf("%s/ssh/%s", d.endpoint, id)
 	tflog.Debug(ctx, "Reading SSH data source by UUID", map[string]interface{}{
 		"url": getURL,
 		"id":  id,
 	})
 
-	body, err := doSSHDataSourceRequest(ctx, d.httpClient, http.MethodGet, getURL, nil)
+	body, err := doSSHDSRequest(ctx, d.httpClient, http.MethodGet, getURL, nil)
 	if err != nil {
 		if IsNotFound(err) {
-			resp.Diagnostics.AddWarning("Not found", fmt.Sprintf("No SSH rule found for id '%s'", id))
-			// The data source won't be populated in the state if it's not found.
+			// Not found => no state
 			return
 		}
-		resp.Diagnostics.AddError("Error reading SSH data source", err.Error())
+		resp.Diagnostics.AddError("Read SSH DS error", err.Error())
 		return
 	}
 
-	// 3) Parse the TaclSSHResponse
-	var sshResp TaclSSHResponse
-	if e := json.Unmarshal(body, &sshResp); e != nil {
-		resp.Diagnostics.AddError("JSON parse error", e.Error())
+	var fetched TaclSSHResponse
+	if e := json.Unmarshal(body, &fetched); e != nil {
+		resp.Diagnostics.AddError("Parse DS JSON error", e.Error())
 		return
 	}
 
-	// 4) Update data with fetched info
-	data.ID = types.StringValue(sshResp.ID)
-	data.Action = types.StringValue(sshResp.Action)
-	data.Src = toTerraformStringSlice(sshResp.Src)
-	data.Dst = toTerraformStringSlice(sshResp.Dst)
-	data.Users = toTerraformStringSlice(sshResp.Users)
-	data.CheckPeriod = types.StringValue(sshResp.CheckPeriod)
-	data.AcceptEnv = toTerraformStringSlice(sshResp.AcceptEnv)
+	data.ID = types.StringValue(fetched.ID)
+	data.Action = types.StringValue(fetched.Action)
+	data.Src = toTerraformStringSlice(fetched.Src)
+	data.Dst = toTerraformStringSlice(fetched.Dst)
+	data.Users = toTerraformStringSlice(fetched.Users)
+
+	if fetched.CheckPeriod != "" {
+		data.CheckPeriod = types.StringValue(fetched.CheckPeriod)
+	} else {
+		data.CheckPeriod = types.StringNull()
+	}
+
+	if len(fetched.AcceptEnv) > 0 {
+		data.AcceptEnv = toTerraformStringSlice(fetched.AcceptEnv)
+	} else {
+		data.AcceptEnv = nilListOfString()
+	}
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
 
-// --------------------------------------------------------------------------------
-// Helper Function
-// --------------------------------------------------------------------------------
-
-// doSSHDataSourceRequest => simpler GET helper for the data source
-func doSSHDataSourceRequest(ctx context.Context, client *http.Client, method, url string, payload interface{}) ([]byte, error) {
+func doSSHDSRequest(ctx context.Context, client *http.Client, method, url string, payload interface{}) ([]byte, error) {
 	var body io.Reader
 	if payload != nil {
 		b, err := json.Marshal(payload)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal payload: %w", err)
+			return nil, fmt.Errorf("failed to marshal DS payload: %w", err)
 		}
 		body = bytes.NewBuffer(b)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("SSH DS request creation error: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request error: %w", err)
+		return nil, fmt.Errorf("SSH DS request error: %w", err)
 	}
 	defer res.Body.Close()
 
@@ -192,12 +196,8 @@ func doSSHDataSourceRequest(ctx context.Context, client *http.Client, method, ur
 	}
 	if res.StatusCode >= 300 {
 		msg, _ := io.ReadAll(res.Body)
-		return nil, fmt.Errorf("TACL returned %d: %s", res.StatusCode, string(msg))
+		return nil, fmt.Errorf("TACL returned HTTP %d: %s", res.StatusCode, string(msg))
 	}
 
-	respBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-	return respBody, nil
+	return io.ReadAll(res.Body)
 }

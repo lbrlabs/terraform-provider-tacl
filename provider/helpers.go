@@ -246,3 +246,8 @@ func goStringsToList(arr []string) (types.List, error) {
 
     return listVal, nil
 }
+
+// Return a nil slice so the final state sees it as null
+func nilListOfString() []types.String {
+	return nil
+}
