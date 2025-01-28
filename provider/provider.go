@@ -56,27 +56,6 @@ func (p *taclProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				Description: "TACL server URL (e.g. http://localhost:8080).",
 				Required:    true,
 			},
-			"client_id": schema.StringAttribute{
-				Description: "OAuth client ID for ephemeral Tailscale authentication (optional).",
-				Optional:    true,
-			},
-			"client_secret": schema.StringAttribute{
-				Description: "OAuth client secret for ephemeral Tailscale authentication (optional).",
-				Optional:    true,
-				Sensitive:   true,
-			},
-			"tailnet_name": schema.StringAttribute{
-				Description: "Tailnet name for ephemeral Tailscale auth (e.g. mycorp.ts.net).",
-				Optional:    true,
-			},
-			"tags": schema.StringAttribute{
-				Description: "Comma-separated tags for ephemeral Tailscale nodes.",
-				Optional:    true,
-			},
-			"ephemeral": schema.BoolAttribute{
-				Description: "Whether ephemeral Tailscale keys are used (default true).",
-				Optional:    true,
-			},
 		},
 	}
 }
