@@ -165,5 +165,3 @@ func doDSHTTPRequest(ctx context.Context, client *http.Client, method, url strin
 
 	return io.ReadAll(r.Body)
 }
-
-

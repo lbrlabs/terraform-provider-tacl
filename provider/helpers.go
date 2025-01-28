@@ -231,20 +231,20 @@ func listToGoStrings(ctx context.Context, l types.List) ([]string, error) {
 
 // Convert []string => types.List
 func goStringsToList(arr []string) (types.List, error) {
-    // Convert each string to types.StringValue
-    elems := make([]attr.Value, len(arr))
-    for i, s := range arr {
-        elems[i] = types.StringValue(s)
-    }
+	// Convert each string to types.StringValue
+	elems := make([]attr.Value, len(arr))
+	for i, s := range arr {
+		elems[i] = types.StringValue(s)
+	}
 
-    // Build the ListValue and check for diags
-    listVal, diags := types.ListValue(types.StringType, elems)
-    if diags.HasError() {
-        // Combine all diags into an error string
-        return types.ListNull(types.StringType), fmt.Errorf("failed building list of strings: %s", diags.Errors())
-    }
+	// Build the ListValue and check for diags
+	listVal, diags := types.ListValue(types.StringType, elems)
+	if diags.HasError() {
+		// Combine all diags into an error string
+		return types.ListNull(types.StringType), fmt.Errorf("failed building list of strings: %s", diags.Errors())
+	}
 
-    return listVal, nil
+	return listVal, nil
 }
 
 // Return a nil slice so the final state sees it as null

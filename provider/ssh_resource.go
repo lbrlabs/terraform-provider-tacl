@@ -374,5 +374,3 @@ func doSSHIDRequest(ctx context.Context, client *http.Client, method, url string
 
 	return io.ReadAll(respHTTP.Body)
 }
-
-

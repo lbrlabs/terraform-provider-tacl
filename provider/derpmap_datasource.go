@@ -37,16 +37,16 @@ type derpMapDataSource struct {
 //------------------------------
 
 type derpMapDataSourceModel struct {
-	ID                 types.String       `tfsdk:"id"`                   // Always "derpmap" if found
-	OmitDefaultRegions types.Bool         `tfsdk:"omit_default_regions"` // read from the server
-	Regions            []dsRegionModel    `tfsdk:"regions"`
+	ID                 types.String    `tfsdk:"id"`                   // Always "derpmap" if found
+	OmitDefaultRegions types.Bool      `tfsdk:"omit_default_regions"` // read from the server
+	Regions            []dsRegionModel `tfsdk:"regions"`
 }
 
 type dsRegionModel struct {
-	RegionID   types.Int64    `tfsdk:"region_id"`
-	RegionCode types.String   `tfsdk:"region_code"`
-	RegionName types.String   `tfsdk:"region_name"`
-	Nodes      []dsNodeModel  `tfsdk:"nodes"`
+	RegionID   types.Int64   `tfsdk:"region_id"`
+	RegionCode types.String  `tfsdk:"region_code"`
+	RegionName types.String  `tfsdk:"region_name"`
+	Nodes      []dsNodeModel `tfsdk:"nodes"`
 }
 
 type dsNodeModel struct {

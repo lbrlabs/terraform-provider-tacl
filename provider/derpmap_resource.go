@@ -87,7 +87,7 @@ func (r *derpMapResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"omit_default_regions": schema.BoolAttribute{
 				Description: "If true, Tailscale's default DERP regions are omitted.",
 				Optional:    true,
-    			Computed:    true,
+				Computed:    true,
 			},
 			"regions": schema.ListNestedAttribute{
 				Description: "List of DERP regions.",
@@ -141,9 +141,9 @@ func (r *derpMapResource) Schema(ctx context.Context, req resource.SchemaRequest
 	}
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // Create => POST /derpmap
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 func (r *derpMapResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan derpMapResourceModel
 	diags := req.Plan.Get(ctx, &plan)
@@ -172,9 +172,9 @@ func (r *derpMapResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(diags...)
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // Read => GET /derpmap
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 func (r *derpMapResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state derpMapResourceModel
 	diags := req.State.Get(ctx, &state)
@@ -204,9 +204,9 @@ func (r *derpMapResource) Read(ctx context.Context, req resource.ReadRequest, re
 	resp.Diagnostics.Append(diags...)
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // Update => PUT /derpmap
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 func (r *derpMapResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan derpMapResourceModel
 	diags := req.Plan.Get(ctx, &plan)
@@ -237,9 +237,9 @@ func (r *derpMapResource) Update(ctx context.Context, req resource.UpdateRequest
 	resp.Diagnostics.Append(diags...)
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 // Delete => DELETE /derpmap
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 func (r *derpMapResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	delURL := fmt.Sprintf("%s/derpmap", r.endpoint)
 	_, err := doDERPMapRequest(ctx, r.httpClient, http.MethodDelete, delURL, nil)
@@ -324,63 +324,63 @@ func resourceModelToDERPMap(model derpMapResourceModel) *tsclient.ACLDERPMap {
 // derpMapToResourceModel => convert Tailscale struct => typed TF state
 // derpMapToResourceModel => convert Tailscale struct => typed TF state
 func derpMapToResourceModel(dm *tsclient.ACLDERPMap) derpMapResourceModel {
-    if dm == nil {
-        return derpMapResourceModel{}
-    }
+	if dm == nil {
+		return derpMapResourceModel{}
+	}
 
-    // 1) Collect region IDs into a slice so we can sort them
-    var regionIDs []int
-    for rID := range dm.Regions {
-        regionIDs = append(regionIDs, rID)
-    }
-    sort.Ints(regionIDs) // stable ascending order
+	// 1) Collect region IDs into a slice so we can sort them
+	var regionIDs []int
+	for rID := range dm.Regions {
+		regionIDs = append(regionIDs, rID)
+	}
+	sort.Ints(regionIDs) // stable ascending order
 
-    var regionList []derpMapRegionModel
+	var regionList []derpMapRegionModel
 
-    // 2) Iterate over sorted region IDs
-    for _, rID := range regionIDs {
-        regionPtr := dm.Regions[rID]
-        if regionPtr == nil {
-            continue
-        }
-        // Gather node data in a slice
-        var nodes []derpMapNodeModel
-        // If you want a stable node order, e.g. by node's Name:
-        // create a slice of node references first
-        var nodeRefs []*tsclient.ACLDERPNode
-        for _, n := range regionPtr.Nodes {
-            if n != nil {
-                nodeRefs = append(nodeRefs, n)
-            }
-        }
-        // sort nodeRefs by name (or hostName, or regionID—whatever you prefer)
-        sort.Slice(nodeRefs, func(i, j int) bool {
-            return nodeRefs[i].Name < nodeRefs[j].Name
-        })
+	// 2) Iterate over sorted region IDs
+	for _, rID := range regionIDs {
+		regionPtr := dm.Regions[rID]
+		if regionPtr == nil {
+			continue
+		}
+		// Gather node data in a slice
+		var nodes []derpMapNodeModel
+		// If you want a stable node order, e.g. by node's Name:
+		// create a slice of node references first
+		var nodeRefs []*tsclient.ACLDERPNode
+		for _, n := range regionPtr.Nodes {
+			if n != nil {
+				nodeRefs = append(nodeRefs, n)
+			}
+		}
+		// sort nodeRefs by name (or hostName, or regionID—whatever you prefer)
+		sort.Slice(nodeRefs, func(i, j int) bool {
+			return nodeRefs[i].Name < nodeRefs[j].Name
+		})
 
-        // now build the typed list
-        for _, nptr := range nodeRefs {
-            nodes = append(nodes, derpMapNodeModel{
-                Name:     types.StringValue(nptr.Name),
-                RegionID: types.Int64Value(int64(nptr.RegionID)),
-                HostName: types.StringValue(nptr.HostName),
-                IPv4:     types.StringValue(nptr.IPv4),
-                IPv6:     types.StringValue(nptr.IPv6),
-            })
-        }
+		// now build the typed list
+		for _, nptr := range nodeRefs {
+			nodes = append(nodes, derpMapNodeModel{
+				Name:     types.StringValue(nptr.Name),
+				RegionID: types.Int64Value(int64(nptr.RegionID)),
+				HostName: types.StringValue(nptr.HostName),
+				IPv4:     types.StringValue(nptr.IPv4),
+				IPv6:     types.StringValue(nptr.IPv6),
+			})
+		}
 
-        // Build one region
-        regionList = append(regionList, derpMapRegionModel{
-            RegionID:   types.Int64Value(int64(rID)), // from map key
-            RegionCode: types.StringValue(regionPtr.RegionCode),
-            RegionName: types.StringValue(regionPtr.RegionName),
-            Nodes:      nodes,
-        })
-    }
+		// Build one region
+		regionList = append(regionList, derpMapRegionModel{
+			RegionID:   types.Int64Value(int64(rID)), // from map key
+			RegionCode: types.StringValue(regionPtr.RegionCode),
+			RegionName: types.StringValue(regionPtr.RegionName),
+			Nodes:      nodes,
+		})
+	}
 
-    return derpMapResourceModel{
-        ID:                 types.StringValue("derpmap"),
-        OmitDefaultRegions: types.BoolValue(dm.OmitDefaultRegions),
-        Regions:            regionList,
-    }
+	return derpMapResourceModel{
+		ID:                 types.StringValue("derpmap"),
+		OmitDefaultRegions: types.BoolValue(dm.OmitDefaultRegions),
+		Regions:            regionList,
+	}
 }

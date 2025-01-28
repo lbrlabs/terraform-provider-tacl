@@ -41,8 +41,8 @@ type nodeattrResource struct {
 // "target" & "attr" are both types.List so we can handle unknown values, etc.
 type nodeattrResourceModel struct {
 	ID      types.String `tfsdk:"id"`
-	Target  types.List   `tfsdk:"target"`  // Terraform list of strings
-	Attr    types.List   `tfsdk:"attr"`    // Terraform list of strings
+	Target  types.List   `tfsdk:"target"` // Terraform list of strings
+	Attr    types.List   `tfsdk:"attr"`   // Terraform list of strings
 	AppJSON types.String `tfsdk:"app_json"`
 }
 
